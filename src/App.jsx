@@ -38,6 +38,7 @@ export default function App() {
   const [errMsg, setErrMsg] = useState("");
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 760);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [phaseDraft, setPhaseDraft] = useState(null); // { key, value } while editing a phase name
   const debounce = useDebouncedWriter();
 
   useEffect(() => {
@@ -124,6 +125,20 @@ export default function App() {
 
   const nextSort = (arr) => arr.reduce((m, x) => Math.max(m, x.sort || 0), 0) + 1;
 
+  // Rename a whole phase: update every task in this project that has the old phase name.
+  const renamePhase = async (oldName, newName) => {
+    const clean = (newName || "").trim();
+    if (clean === "" || clean === oldName) return;
+    const stored = oldName === "—" ? "" : oldName; // "—" is the display label for a blank phase
+    const affected = tasks.filter(t => t.project_id === activeProject && (t.phase || "") === stored);
+    if (!affected.length) return;
+    const ids = affected.map(t => t.id);
+    ids.forEach(markWrite);
+    setTasks(rows => rows.map(t => ids.includes(t.id) ? { ...t, phase: clean } : t));
+    const { error } = await supabase.from("tasks").update({ phase: clean }).in("id", ids);
+    if (error) flash("Rename failed: " + error.message);
+  };
+
   const ownerNames = useMemo(() => {
     const names = people.map(p => p.name);
     return names.includes("Unassigned") ? names : ["Unassigned", ...names];
@@ -157,7 +172,9 @@ export default function App() {
   );
   const dateInput = (val, onChange, accent) => (
     <input type="date" value={val || ""} onChange={e => onChange(e.target.value || null)}
-      style={{ ...mono, fontSize: 11, background: C.ink, color: val ? accent || C.dim : C.faint, border: "1px solid " + C.line, borderRadius: 6, padding: "5px 6px", outline: "none", width: "100%" }} />
+      onFocus={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }}
+      onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }}
+      style={{ ...mono, fontSize: 11, background: C.ink, color: val ? accent || C.dim : C.faint, border: "1px solid " + C.line, borderRadius: 6, padding: "5px 6px", outline: "none", width: "100%", cursor: "pointer" }} />
   );
 
   if (!loaded) return <div style={{ background: C.ink, color: C.dim, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...mono }}>Loading camp…</div>;
@@ -292,8 +309,15 @@ export default function App() {
                 return (
                   <div key={phase} style={{ marginBottom: 24, minWidth: isMobile ? "auto" : 720 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                      <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: C.dim }}>{phase}</h3>
-                      <span style={{ ...mono, fontSize: 10.5, color: C.faint }}>{done}/{total}</span>
+                      <input
+                        value={phaseDraft && phaseDraft.key === phase ? phaseDraft.value : phase}
+                        onChange={e => setPhaseDraft({ key: phase, value: e.target.value })}
+                        onFocus={(e) => { setPhaseDraft({ key: phase, value: phase }); fIn(e); }}
+                        onBlur={(e) => { renamePhase(phase, phaseDraft ? phaseDraft.value : phase); setPhaseDraft(null); fOut(e); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                        title="Rename this phase (applies to all its tasks)"
+                        style={{ ...inputStyle, fontSize: 14, fontWeight: 700, color: C.dim, width: "auto", maxWidth: 320, flexShrink: 1 }} />
+                      <span style={{ ...mono, fontSize: 10.5, color: C.faint, whiteSpace: "nowrap" }}>{done}/{total}</span>
                       <div style={{ flex: 1, height: 1, background: C.line }} />
                     </div>
                     {!isMobile && (
