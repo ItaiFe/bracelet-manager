@@ -36,7 +36,15 @@ export default function App() {
   const [online, setOnline] = useState(false);
   const [filterOwner, setFilterOwner] = useState("All");
   const [errMsg, setErrMsg] = useState("");
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 760);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const debounce = useDebouncedWriter();
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Rows this client wrote recently — used to ignore the realtime echo of our
   // own changes so it can't overwrite an edit that's still in progress.
@@ -165,11 +173,33 @@ export default function App() {
         </div>
       )}
 
+      {/* Mobile top bar */}
+      {isMobile && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 60, height: 52, display: "flex", alignItems: "center", gap: 12, padding: "0 16px", background: C.panel, borderBottom: "1px solid " + C.line }}>
+          <button onClick={() => setDrawerOpen(true)} aria-label="Menu" style={{ background: "transparent", border: "none", color: C.txt, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 4 }}>☰</button>
+          <span style={{ fontSize: 16, fontWeight: 800, background: `linear-gradient(95deg, ${C.pink}, ${C.gold} 55%, ${C.teal})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Flamingods</span>
+          <span style={{ ...mono, fontSize: 11, color: C.dim, marginLeft: "auto", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "45vw" }}>
+            {view === "people" ? "Camp Members" : (projects.find(p => p.id === activeProject)?.name || "")}
+          </span>
+        </div>
+      )}
+
+      {/* Drawer backdrop on mobile */}
+      {isMobile && drawerOpen && (
+        <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 70 }} />
+      )}
+
       {/* ---------------- LEFT RAIL: PROJECTS ---------------- */}
-      <div style={{ width: 230, flexShrink: 0, borderRight: "1px solid " + C.line, background: C.panel, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        <div style={{ padding: "22px 18px 14px" }}>
-          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", background: `linear-gradient(95deg, ${C.pink}, ${C.gold} 55%, ${C.teal})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Flamingods</div>
-          <div style={{ ...mono, fontSize: 10, letterSpacing: ".2em", textTransform: "uppercase", color: C.faint, marginTop: 4 }}>Midburn · Camp Tasks</div>
+      <div style={isMobile
+        ? { position: "fixed", top: 0, bottom: 0, left: 0, width: 250, zIndex: 80, transform: drawerOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform .25s ease", borderRight: "1px solid " + C.line, background: C.panel, display: "flex", flexDirection: "column", boxShadow: drawerOpen ? "4px 0 24px rgba(0,0,0,.5)" : "none" }
+        : { width: 230, flexShrink: 0, borderRight: "1px solid " + C.line, background: C.panel, display: "flex", flexDirection: "column", minHeight: "100vh" }
+      }>
+        <div style={{ padding: "22px 18px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", background: `linear-gradient(95deg, ${C.pink}, ${C.gold} 55%, ${C.teal})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Flamingods</div>
+            <div style={{ ...mono, fontSize: 10, letterSpacing: ".2em", textTransform: "uppercase", color: C.faint, marginTop: 4 }}>Midburn · Camp Tasks</div>
+          </div>
+          {isMobile && <button onClick={() => setDrawerOpen(false)} aria-label="Close" style={{ background: "transparent", border: "none", color: C.faint, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>}
         </div>
 
         <div style={{ ...mono, fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: C.faint, padding: "8px 18px 6px" }}>Projects</div>
@@ -179,7 +209,7 @@ export default function App() {
             const done = ts.filter(t => t.status === "Done").length;
             const isActive = p.id === activeProject && view === "tasks";
             return (
-              <div key={p.id} onClick={() => { setActiveProject(p.id); setView("tasks"); }}
+              <div key={p.id} onClick={() => { setActiveProject(p.id); setView("tasks"); setDrawerOpen(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", cursor: "pointer", background: isActive ? C.panel2 : "transparent", borderLeft: "3px solid " + (isActive ? C.gold : "transparent") }}>
                 <span style={{ fontSize: 15 }}>{p.emoji || "•"}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -193,7 +223,7 @@ export default function App() {
             style={{ ...mono, fontSize: 11, color: C.faint, background: "transparent", border: "none", padding: "10px 18px", cursor: "pointer", textAlign: "left", width: "100%" }}>+ new project</button>
         </div>
 
-        <div onClick={() => setView("people")} style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 18px", cursor: "pointer", borderTop: "1px solid " + C.line, background: view === "people" ? C.panel2 : "transparent", borderLeft: "3px solid " + (view === "people" ? C.gold : "transparent") }}>
+        <div onClick={() => { setView("people"); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 18px", cursor: "pointer", borderTop: "1px solid " + C.line, background: view === "people" ? C.panel2 : "transparent", borderLeft: "3px solid " + (view === "people" ? C.gold : "transparent") }}>
           <span style={{ fontSize: 15 }}>🦩</span>
           <span style={{ fontSize: 13.5, fontWeight: 600, color: view === "people" ? C.txt : C.dim }}>Camp Members</span>
           <span style={{ ...mono, fontSize: 10, color: C.faint, marginLeft: "auto" }}>{people.filter(p => p.name !== "Unassigned").length}</span>
@@ -205,11 +235,11 @@ export default function App() {
       </div>
 
       {/* ---------------- MAIN ---------------- */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", paddingTop: isMobile ? 52 : 0 }}>
 
         {/* ===== PEOPLE VIEW ===== */}
         {view === "people" && (
-          <div style={{ padding: "28px 32px", maxWidth: 760 }}>
+          <div style={{ padding: isMobile ? "16px" : "28px 32px", maxWidth: 760 }}>
             <h1 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 4px" }}>Camp Members</h1>
             <div style={{ color: C.dim, fontSize: 14, marginBottom: 22 }}>Add the real people in Flamingods. They become the owner options on every task.</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 24px", gap: 8, ...mono, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: C.faint, padding: "0 10px 8px" }}>
@@ -229,7 +259,7 @@ export default function App() {
         {/* ===== TASKS VIEW ===== */}
         {view === "tasks" && activeProjObj && (
           <>
-            <div style={{ padding: "24px 32px 18px", borderBottom: "1px solid " + C.line, background: `radial-gradient(circle at 0% 0%, rgba(255,93,177,.10), transparent 45%), radial-gradient(circle at 100% 0%, rgba(61,214,196,.08), transparent 45%)` }}>
+            <div style={{ padding: isMobile ? "16px 16px 14px" : "24px 32px 18px", borderBottom: "1px solid " + C.line, background: `radial-gradient(circle at 0% 0%, rgba(255,93,177,.10), transparent 45%), radial-gradient(circle at 100% 0%, rgba(61,214,196,.08), transparent 45%)` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 24 }}>{activeProjObj.emoji || "•"}</span>
                 <input value={activeProjObj.name} onChange={e => patchRow("projects", setProjects, activeProjObj.id, { name: e.target.value })} onFocus={fIn} onBlur={fOut} style={{ ...inputStyle, fontSize: 22, fontWeight: 800, letterSpacing: "-.02em", maxWidth: 420 }} />
@@ -251,7 +281,7 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ padding: "20px 32px", overflowX: "auto" }}>
+            <div style={{ padding: isMobile ? "16px" : "20px 32px", overflowX: isMobile ? "visible" : "auto" }}>
               {Object.keys(phases).length === 0 && (
                 <div style={{ color: C.faint, fontSize: 14, padding: "20px 0" }}>No tasks yet. Add the first one below.</div>
               )}
@@ -260,20 +290,51 @@ export default function App() {
                 const done = allProjTasks.filter(t => (t.phase || "—") === phase && t.status === "Done").length;
                 const total = allProjTasks.filter(t => (t.phase || "—") === phase).length;
                 return (
-                  <div key={phase} style={{ marginBottom: 24, minWidth: 720 }}>
+                  <div key={phase} style={{ marginBottom: 24, minWidth: isMobile ? "auto" : 720 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                       <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: C.dim }}>{phase}</h3>
                       <span style={{ ...mono, fontSize: 10.5, color: C.faint }}>{done}/{total}</span>
                       <div style={{ flex: 1, height: 1, background: C.line }} />
                     </div>
+                    {!isMobile && (
                     <div style={{ display: "grid", gridTemplateColumns: "20px 1fr 120px 120px 120px 120px 24px", gap: 8, ...mono, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: C.faint, padding: "0 10px 6px" }}>
                       <div /><div>Task</div><div>Owner</div><div>Status</div><div>Start</div><div>Deadline</div><div />
                     </div>
+                    )}
                     {list.map(t => {
                       const d = daysUntil(t.deadline);
                       const overdue = d != null && d < 0 && t.status !== "Done";
                       const soon = d != null && d >= 0 && d <= 7 && t.status !== "Done";
                       const dlAccent = t.status === "Done" ? C.teal : overdue ? C.pink : soon ? C.gold : C.dim;
+
+                      if (isMobile) {
+                        // ----- Stacked card layout for phones -----
+                        return (
+                          <div key={t.id} style={{ padding: "12px 14px", borderRadius: 10, background: C.panel, border: "1px solid " + (overdue ? C.pink : C.line), marginBottom: 8 }}>
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                              <input type="checkbox" checked={t.status === "Done"} onChange={e => patchRow("tasks", setTasks, t.id, { status: e.target.checked ? "Done" : "Not started" })} style={{ width: 20, height: 20, accentColor: C.teal, cursor: "pointer", marginTop: 2, flexShrink: 0 }} />
+                              <textarea value={t.title} rows={1} onChange={e => patchRow("tasks", setTasks, t.id, { title: e.target.value })} onFocus={fIn} onBlur={fOut} style={{ ...inputStyle, fontSize: 15, fontWeight: 600, resize: "none", lineHeight: 1.35, textDecoration: t.status === "Done" ? "line-through" : "none", color: t.status === "Done" ? C.faint : C.txt }} />
+                              {del(() => delRow("tasks", setTasks, t.id))}
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                              <label style={{ ...mono, fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: C.faint }}>Owner
+                                <div style={{ marginTop: 3 }}>{sel(t.owner || "Unassigned", ownerNames, v => patchRow("tasks", setTasks, t.id, { owner: v }))}</div>
+                              </label>
+                              <label style={{ ...mono, fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: C.faint }}>Status
+                                <div style={{ marginTop: 3 }}>{sel(t.status, STATUSES, v => patchRow("tasks", setTasks, t.id, { status: v }), STATUS_COLOR[t.status])}</div>
+                              </label>
+                              <label style={{ ...mono, fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: C.faint }}>Start
+                                <div style={{ marginTop: 3 }}>{dateInput(t.start_date, v => patchRow("tasks", setTasks, t.id, { start_date: v }), C.dim)}</div>
+                              </label>
+                              <label style={{ ...mono, fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: C.faint }}>Deadline
+                                <div style={{ marginTop: 3 }}>{dateInput(t.deadline, v => patchRow("tasks", setTasks, t.id, { deadline: v }), dlAccent)}</div>
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // ----- Grid row layout for desktop -----
                       return (
                         <div key={t.id} style={{ display: "grid", gridTemplateColumns: "20px 1fr 120px 120px 120px 120px 24px", gap: 8, alignItems: "center", padding: "8px 10px", borderRadius: 8, background: C.panel, border: "1px solid " + (overdue ? C.pink : C.line), marginBottom: 6 }}>
                           <input type="checkbox" checked={t.status === "Done"} onChange={e => patchRow("tasks", setTasks, t.id, { status: e.target.checked ? "Done" : "Not started" })} style={{ width: 16, height: 16, accentColor: C.teal, cursor: "pointer" }} />
