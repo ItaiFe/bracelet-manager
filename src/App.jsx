@@ -139,6 +139,24 @@ export default function App() {
     if (error) flash("Rename failed: " + error.message);
   };
 
+  // Move a task up/down within its visible phase list by swapping sort values.
+  const moveTask = async (task, dir, siblings) => {
+    const i = siblings.findIndex(t => t.id === task.id);
+    const j = dir === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= siblings.length) return; // already at the edge
+    const a = siblings[i], b = siblings[j];
+    const aSort = a.sort || 0, bSort = b.sort || 0;
+    markWrite(a.id); markWrite(b.id);
+    setTasks(rows => rows.map(t =>
+      t.id === a.id ? { ...t, sort: bSort } : t.id === b.id ? { ...t, sort: aSort } : t
+    ));
+    const [r1, r2] = await Promise.all([
+      supabase.from("tasks").update({ sort: bSort }).eq("id", a.id),
+      supabase.from("tasks").update({ sort: aSort }).eq("id", b.id),
+    ]);
+    if (r1.error || r2.error) flash("Reorder failed: " + (r1.error || r2.error).message);
+  };
+
   const ownerNames = useMemo(() => {
     const names = people.map(p => p.name);
     return names.includes("Unassigned") ? names : ["Unassigned", ...names];
@@ -146,7 +164,8 @@ export default function App() {
 
   const projTasks = useMemo(
     () => tasks.filter(t => t.project_id === activeProject &&
-      (filterOwner === "All" || t.owner === filterOwner)),
+      (filterOwner === "All" || t.owner === filterOwner))
+      .sort((a, b) => (a.sort || 0) - (b.sort || 0)),
     [tasks, activeProject, filterOwner]
   );
   const phases = useMemo(() => {
@@ -169,6 +188,17 @@ export default function App() {
   const del = (onClick) => (
     <button onClick={onClick} title="delete" style={{ background: "transparent", border: "none", color: C.faint, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 6px" }}
       onMouseEnter={e => e.target.style.color = C.pink} onMouseLeave={e => e.target.style.color = C.faint}>×</button>
+  );
+  const arrowBtn = (label, onClick, disabled) => (
+    <button onClick={disabled ? undefined : onClick} title={label === "▲" ? "Move up" : "Move down"} disabled={disabled}
+      style={{ background: "transparent", border: "none", color: disabled ? C.line : C.faint, cursor: disabled ? "default" : "pointer", fontSize: 11, lineHeight: 1, padding: 0, height: 13 }}
+      onMouseEnter={e => { if (!disabled) e.target.style.color = C.gold; }} onMouseLeave={e => { if (!disabled) e.target.style.color = C.faint; }}>{label}</button>
+  );
+  const moveBtns = (task, idx, listArr) => (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2 }}>
+      {arrowBtn("▲", () => moveTask(task, "up", listArr), idx === 0)}
+      {arrowBtn("▼", () => moveTask(task, "down", listArr), idx === listArr.length - 1)}
+    </div>
   );
   const dateInput = (val, onChange, accent) => (
     <input type="date" value={val || ""} onChange={e => onChange(e.target.value || null)}
@@ -321,11 +351,11 @@ export default function App() {
                       <div style={{ flex: 1, height: 1, background: C.line }} />
                     </div>
                     {!isMobile && (
-                    <div style={{ display: "grid", gridTemplateColumns: "20px 1fr 120px 120px 120px 120px 24px", gap: 8, ...mono, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: C.faint, padding: "0 10px 6px" }}>
-                      <div /><div>Task</div><div>Owner</div><div>Status</div><div>Start</div><div>Deadline</div><div />
+                    <div style={{ display: "grid", gridTemplateColumns: "28px 20px 1fr 120px 120px 120px 120px 24px", gap: 8, ...mono, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: C.faint, padding: "0 10px 6px" }}>
+                      <div /><div /><div>Task</div><div>Owner</div><div>Status</div><div>Start</div><div>Deadline</div><div />
                     </div>
                     )}
-                    {list.map(t => {
+                    {list.map((t, idx) => {
                       const d = daysUntil(t.deadline);
                       const overdue = d != null && d < 0 && t.status !== "Done";
                       const soon = d != null && d >= 0 && d <= 7 && t.status !== "Done";
@@ -338,7 +368,10 @@ export default function App() {
                             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                               <input type="checkbox" checked={t.status === "Done"} onChange={e => patchRow("tasks", setTasks, t.id, { status: e.target.checked ? "Done" : "Not started" })} style={{ width: 20, height: 20, accentColor: C.teal, cursor: "pointer", marginTop: 2, flexShrink: 0 }} />
                               <textarea value={t.title} rows={1} onChange={e => patchRow("tasks", setTasks, t.id, { title: e.target.value })} onFocus={fIn} onBlur={fOut} style={{ ...inputStyle, fontSize: 15, fontWeight: 600, resize: "none", lineHeight: 1.35, textDecoration: t.status === "Done" ? "line-through" : "none", color: t.status === "Done" ? C.faint : C.txt }} />
-                              {del(() => delRow("tasks", setTasks, t.id))}
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                                {moveBtns(t, idx, list)}
+                                {del(() => delRow("tasks", setTasks, t.id))}
+                              </div>
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
                               <label style={{ ...mono, fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: C.faint }}>Owner
@@ -360,7 +393,8 @@ export default function App() {
 
                       // ----- Grid row layout for desktop -----
                       return (
-                        <div key={t.id} style={{ display: "grid", gridTemplateColumns: "20px 1fr 120px 120px 120px 120px 24px", gap: 8, alignItems: "center", padding: "8px 10px", borderRadius: 8, background: C.panel, border: "1px solid " + (overdue ? C.pink : C.line), marginBottom: 6 }}>
+                        <div key={t.id} style={{ display: "grid", gridTemplateColumns: "28px 20px 1fr 120px 120px 120px 120px 24px", gap: 8, alignItems: "center", padding: "8px 10px", borderRadius: 8, background: C.panel, border: "1px solid " + (overdue ? C.pink : C.line), marginBottom: 6 }}>
+                          {moveBtns(t, idx, list)}
                           <input type="checkbox" checked={t.status === "Done"} onChange={e => patchRow("tasks", setTasks, t.id, { status: e.target.checked ? "Done" : "Not started" })} style={{ width: 16, height: 16, accentColor: C.teal, cursor: "pointer" }} />
                           <input value={t.title} onChange={e => patchRow("tasks", setTasks, t.id, { title: e.target.value })} onFocus={fIn} onBlur={fOut} style={{ ...inputStyle, fontSize: 13.5, textDecoration: t.status === "Done" ? "line-through" : "none", color: t.status === "Done" ? C.faint : C.txt }} />
                           {sel(t.owner || "Unassigned", ownerNames, v => patchRow("tasks", setTasks, t.id, { owner: v }))}
